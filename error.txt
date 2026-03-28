@@ -1,0 +1,24 @@
+INFO:telecom_anomaly.core.detector:Initialized TelecomAnomalyDetector with 5 detectors
+INFO:telecom_anomaly.io.reader:Reading data from C:\Users\winsweb\AppData\Local\Temp\tmpdwrf9kgk.csv
+INFO:telecom_anomaly.io.reader:Read 551 valid records from 551 total rows
+INFO:telecom_anomaly.core.detector:Loaded 551 valid records
+INFO:telecom_anomaly.core.detector:Starting anomaly detection
+INFO:telecom_anomaly.core.detector:DurationDetector: 21 anomalies
+INFO:telecom_anomaly.core.detector:FrequencyDetector: 0 anomalies
+INFO:telecom_anomaly.core.detector:SMSDetector: 0 anomalies
+INFO:telecom_anomaly.core.detector:LocationDetector: 0 anomalies
+INFO:telecom_anomaly.core.detector:TimePatternDetector: 9 anomalies
+INFO:telecom_anomaly.core.detector:Detection completed in 0.10s
+INFO:telecom_anomaly.core.detector:Rows with anomalies: 30/551
+INFO:telecom_anomaly.io.exporter:Generating trackable data: C:\my_project\work\GH_Police\Backend\telecom_anomaly_detection\data\output\telecom_data_with_anomalies_20260324_161213.csv
+INFO:telecom_anomaly.io.exporter:Exported 551 rows, 30 with anomalies
+INFO:telecom_anomaly.io.exporter:Results exported to C:\my_project\work\GH_Police\Backend\telecom_anomaly_detection\data\output\telecom_anomaly_results_20260324_161213.json
+INFO:telecom_anomaly.io.exporter:Results exported to C:\my_project\work\GH_Police\Backend\telecom_anomaly_detection\data\output\telecom_anomaly_results_20260324_161213.csv
+INFO:telecom_anomaly.io.exporter:Report generated: C:\my_project\work\GH_Police\Backend\telecom_anomaly_detection\data\output\telecom_anomaly_report_20260324_161213.txt
+INFO:telecom_anomaly.io.exporter:Suspicious subscribers exported to C:\my_project\work\GH_Police\Backend\telecom_anomaly_detection\data\output\suspicious_subscribers_20260324_161213.csv
+ERROR:telecom_anomaly.api:Analysis failed: name 'Path' is not defined
+Traceback (most recent call last):
+  File "C:\my_project\work\GH_Police\Backend\telecom_anomaly_detection\telecom_anomaly\api.py", line 72, in analyze_cdr
+    "saved_files": [Path(p).name for p in outputs.values()] if save_results else []
+                    ^^^^
+NameError: name 'Path' is not defined

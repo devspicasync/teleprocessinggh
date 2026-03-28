@@ -1,0 +1,173 @@
+I want you to add this as a different endpoint because 
+this is the first process that the PDF file has to go through before converting it to a CSV file 
+at first it was a PDF file and then I savely converted it to a CSV file BUT NOTE please make sure 
+to you exactly this code exactly this code if you change anything from it  will altar how the CSV file out put
+has to be saved and this will cause errors to the CSV file, if you don't use exactly the same python code, certain things might change if you 
+change. 
+
+
+BUT NOTE please make sure to you exactly this code exactly this code if you change anything from it  will altar how the CSV file out put which will cause it to fail  with errors
+
+BUT NOTE: you this code for the prcossing ok 
+import tabula
+import pandas as pd
+import io
+import re
+import os
+import glob
+
+# --- CONFIGURATION ---
+INPUT_DIR = "all_pdf"
+RAW_CSV_DIR = "raw_csv_temp" # Temporary folder for initial tabula extraction
+PROCESS_OUTPUT_DIR = 'output_prcess_data'
+STRICT_CLEAN_DIR = 'strictly_cleaned_data'
+
+def setup_folders():
+    """Ensure all necessary output directories exist."""
+    for folder in [RAW_CSV_DIR, PROCESS_OUTPUT_DIR, STRICT_CLEAN_DIR]:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+            print(f"Created directory: {folder}")
+
+def extract_pdf_to_csv(pdf_path, base_name):
+    """Stage 1: Convert PDF tables to a raw CSV file."""
+    csv_path = os.path.join(RAW_CSV_DIR, f"{base_name}_raw.csv")
+    print(f"--- Extracting: {os.path.basename(pdf_path)} ---")
+    try:
+        tabula.convert_into(pdf_path, csv_path, output_format="csv", pages="all", lattice=True)
+        return csv_path
+    except Exception as e:
+        print(f"Error extracting {pdf_path}: {e}")
+        return None
+
+def process_telecom_data_complete(input_path, base_name):
+    """Stage 2: Parse raw CSV and repair fragmented rows."""
+    try:
+        with open(input_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+    except Exception as e:
+        print(f"Error reading {input_path}: {e}")
+        return None
+
+    header_idx = -1
+    for i, line in enumerate(lines):
+        if "event_date_time" in line:
+            header_idx = i
+            break
+    
+    if header_idx == -1:
+        print(f"Skip: Could not find 'event_date_time' in {base_name}")
+        return None
+
+    # Process Customer Info
+    customer_text = "".join(lines[:header_idx])
+    df_customer = pd.read_csv(io.StringIO(customer_text))
+    df_customer.columns = [re.sub(r'[\r\n\s]+', ' ', c).strip() for c in df_customer.columns]
+    cust_path = os.path.join(PROCESS_OUTPUT_DIR, f'{base_name}_customer_info.csv')
+    df_customer.to_csv(cust_path, index=False)
+
+    # Process Call Records
+    call_text = "".join(lines[header_idx:])
+    df_raw = pd.read_csv(io.StringIO(call_text))
+    df_raw.columns = [c.strip() for c in df_raw.columns]
+    main_col = df_raw.columns[0] 
+
+    df_raw = df_raw[df_raw[main_col].astype(str).str.contains("event_date_time") == False]
+
+    fixed_rows = []
+    current_row = None
+    
+    for _, row in df_raw.iterrows():
+        val = str(row[main_col]).strip()
+        if re.match(r'^\d{4}-\d{2}-\d{2}', val):
+            if current_row is not None:
+                fixed_rows.append(current_row)
+            current_row = row.copy()
+        elif current_row is not None:
+            current_row[main_col] = (str(current_row[main_col]) + " " + val).replace('\r', '').replace('\n', '')
+            for col in df_raw.columns:
+                if col != main_col and pd.api.types.is_string_dtype(df_raw[col]):
+                    fragment = str(row[col]).strip()
+                    if fragment.lower() != 'nan':
+                        current_row[col] = (str(current_row[col]) + " " + fragment).replace('\r', '').replace('\n', ' ')
+
+    if current_row is not None:
+        fixed_rows.append(current_row)
+        
+    df_calls = pd.DataFrame(fixed_rows)
+
+    # Date/Time Splitting
+    df_calls[main_col] = df_calls[main_col].str.replace(r'[\r\n]+', '', regex=True).str.replace(r'\s+', ' ', regex=True).str.strip()
+    dt_series = pd.to_datetime(df_calls[main_col], errors='coerce')
+    df_calls['event_date'] = dt_series.dt.date
+    df_calls['event_time'] = dt_series.dt.time
+    df_calls.drop(columns=[main_col], inplace=True)
+
+    # Formatting
+    uppercase_cols = ['district', 'city', 'usage_type', 'usage_sub_type', 'calling_no', 'called_no', 'imei', 'location_id', 'msisdn']
+    for col in df_calls.columns:
+        c_low = col.lower()
+        if df_calls[col].dtype == 'object':
+            df_calls[col] = df_calls[col].astype(str).str.replace(r'[\r\n\s]+', ' ', regex=True).str.strip()
+            if c_low in uppercase_cols:
+                df_calls[col] = df_calls[col].str.upper()
+            elif c_low == 'region':
+                df_calls[col] = df_calls[col].str.title()
+            elif c_low == 'call_direction':
+                df_calls[col] = df_calls[col].str.title().replace({'Incomingmt': 'Incoming (MT)', '\(\(': '(', '\)\)': ')'}, regex=True)
+
+    ordered_cols = ['event_date', 'event_time'] + [c for c in df_calls.columns if c not in ['event_date', 'event_time']]
+    df_calls = df_calls[ordered_cols]
+    
+    interim_path = os.path.join(PROCESS_OUTPUT_DIR, f'{base_name}_call_records_final.csv')
+    df_calls.to_csv(interim_path, index=False)
+    return interim_path
+
+def strict_clean_data(file_path, base_name):
+    """Stage 3: Final strict cleaning."""
+    df = pd.read_csv(file_path)
+    
+    if 'duration' in df.columns and df['duration'].dtype == 'object':
+        df['duration'] = df['duration'].str.replace(',', '.').astype(float)
+
+    df['event_date'] = pd.to_datetime(df['event_date'], errors='coerce')
+    df['event_time_check'] = pd.to_datetime(df['event_time'], format='%H:%M:%S', errors='coerce')
+
+    df_cleaned = df.dropna().copy()
+    df_cleaned = df_cleaned.drop(columns=['event_time_check'])
+
+    final_path = os.path.join(STRICT_CLEAN_DIR, f'{base_name}_strictly_cleaned.csv')
+    df_cleaned.to_csv(final_path, index=False)
+    print(f"-> Final Strict Clean Saved: {final_path}")
+
+if __name__ == "__main__":
+    setup_folders()
+    
+    # Find all PDFs in the input directory
+    pdf_files = glob.glob(os.path.join(INPUT_DIR, "*.pdf"))
+    
+    if not pdf_files:
+        print(f"No PDF files found in {INPUT_DIR}")
+    else:
+        print(f"Found {len(pdf_files)} files to process.")
+        
+        for pdf_path in pdf_files:
+            # Get filename without extension (e.g., '536474453_calls')
+            base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+            
+            # Step 1: PDF -> Raw CSV
+            raw_csv = extract_pdf_to_csv(pdf_path, base_name)
+            
+            if raw_csv:
+                # Step 2: Raw CSV -> Processed CSV
+                interim_csv = process_telecom_data_complete(raw_csv, base_name)
+                
+                if interim_csv:
+                    # Step 3: Processed CSV -> Strict Cleaned
+                    strict_clean_data(interim_csv, base_name)
+                    
+        print("\n--- All Files Processed Successfully ---")
+
+BUT NOTE please make sure to you exactly this code exactly this code if you change anything from it  will altar how the CSV file out put which will cause it to fail  with errors
+
+BUT NOTE: you this code for the prcossing ok 
