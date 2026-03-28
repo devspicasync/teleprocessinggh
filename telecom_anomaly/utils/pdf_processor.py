@@ -15,8 +15,11 @@ STRICT_CLEAN_DIR = DATA_BASE / "strictly_cleaned_data"
 def setup_folders():
     """Ensure all necessary output directories exist."""
     for folder in [RAW_CSV_DIR, PROCESS_OUTPUT_DIR, STRICT_CLEAN_DIR]:
-        if not os.path.exists(folder):
-            os.makedirs(folder)
+        try:
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+        except Exception as e:
+            print(f"Warning: Could not create folder {folder}: {e}")
 
 # --- ORIGINAL FUNCTIONS (Restored) ---
 

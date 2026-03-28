@@ -14,8 +14,12 @@ SAVE_PDF_DIR = DATA_DIR / 'save_pdf'
 LOG_DIR = BASE_DIR / 'logs'
 
 # Create directories if they don't exist
+# On environments like Vercel, this may fail due to read-only filesystem
 for dir_path in [DATA_DIR, INPUT_DIR, OUTPUT_DIR, SAVE_PDF_DIR, LOG_DIR]:
-    dir_path.mkdir(parents=True, exist_ok=True)
+    try:
+        dir_path.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        print(f"Warning: Could not create directory {dir_path}: {e}")
 
 # Logging configuration
 LOGGING_CONFIG = {
